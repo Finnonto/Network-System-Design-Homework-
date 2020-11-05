@@ -24,6 +24,7 @@
  */
 #include "libtrace.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 #include <assert.h>
 #include <getopt.h>
@@ -33,19 +34,31 @@
 //#include "prng.h"
 #include "../lib/massdal/prng.h"
 #define HashCounterNumber 1000
+
+
+
 uint32_t threshold = 1000000;
 unsigned long HH_Table[1000];
 uint16_t Table_entry_cnt = 0;
-uint16_t i ;
+uint16_t i ,j;//for for loop
 uint16_t hash_key1 = 0;
 uint16_t hash_key2 = 0;
 uint16_t hash_key3 = 0;
-uint32_t min;
-char str[20];
 uint32_t HashCounter1[HashCounterNumber] = {0};
 uint32_t HashCounter2[HashCounterNumber] = {0};
 uint32_t HashCounter3[HashCounterNumber] = {0};
-unsigned int total_pkt_len = 0;
+//top 10 board
+unsigned long Top10_Table[10];
+
+long ot; //for timestamp
+uint32_t next_report = 0;// for timestamp
+uint32_t min;
+char str[20];
+
+unsigned int total_pkt_len = 0;//for length
+uint64_t count = 0;// for packet number
+
+inline void swap(unsigned long* x,unsigned long* y) {unsigned long t; t = *x; *x=*y; *y=t;}
 
 inline uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c)
 {
@@ -60,6 +73,52 @@ inline uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c)
 
 	return min;
 }
+
+inline uint32_t get_entry_bytes(unsigned long entry)
+{
+	hash_key1 = hash31(3721,917,ntohl(entry))%HashCounterNumber;
+	hash_key2 = hash31(6969,520,ntohl(entry))%HashCounterNumber;
+	hash_key3 = hash31(5278,444,ntohl(entry))%HashCounterNumber;
+	return Minof3(&HashCounter1[hash_key1],&HashCounter2[hash_key2],&HashCounter3[hash_key3]);
+}
+
+inline void bubble_sort(unsigned long *array,uint16_t limit)
+{
+	for(i=0;i<limit;i--)
+	{
+		for(j=limit-1;j>i;j--)
+		{
+			if(get_entry_bytes(array[j])>get_entry_bytes(array[j-1])){swap(&array[j],&array[j-1]);}
+		}
+	}
+}
+
+inline void get_top10entry()
+{
+	bubble_sort(HH_Table,Table_entry_cnt);
+	printf("------------Heavy Hiiters------------\n");
+	if(Table_entry_cnt<10)
+	{
+		for(i=0;i<Table_entry_cnt;i++)
+		{
+			printf("#%d :  %s  ",i+1, inet_ntop(AF_INET, &HH_Table[i], str, 20));
+			min = get_entry_bytes(HH_Table[i]);
+			printf("trasmit %d Bytes  ",min);
+			printf("consume %03f%% \n",((float)min*100)/total_pkt_len);
+		}
+	}
+	else
+	{
+		for(i=0;i<10;i++)
+		{
+			printf("#%d :  %s  ",i+1, inet_ntop(AF_INET, &HH_Table[i], str, 20));
+			min = get_entry_bytes(HH_Table[i]);
+			printf("trasmit %d Bytes  ",min);
+			printf("consume %03f%% \n",((float)min*100)/total_pkt_len);
+		}	
+	}
+}
+
 
 
 inline void MultistageFilter(struct sockaddr *ip,size_t payload_length)
@@ -115,11 +174,32 @@ void per_packet(libtrace_packet_t *packet)
 {
 	struct sockaddr_storage addr;
 	struct sockaddr *addr_ptr;
+	struct timeval ts;
 	size_t payload_length;
+	// get timestamp	
+	ts = trace_get_timeval(packet);
+	
+	if (next_report == 0) {
+		next_report = ts.tv_sec + ot;
+	}	
+	while (ts.tv_sec > next_report) {
+		get_top10entry();
+		count = 0;
+		next_report += ot;
+	}
+	
+	count += 1;	
 
+	//get payload
 	payload_length=trace_get_payload_length(packet);
+
+	// get ip source sddress	
 	addr_ptr = trace_get_source_address(packet, (struct sockaddr *)&addr);
+
+	// count total packet length 	
 	total_pkt_len+=payload_length;
+
+	// apply Multistage Filter to this packet
 	MultistageFilter(addr_ptr,payload_length);
 	
 }
@@ -148,8 +228,9 @@ int main(int argc, char *argv[])
         libtrace_t *trace = NULL;
         libtrace_packet_t *packet = NULL;
 	
+	
 	/* Ensure we have at least one argument after the program name */
-        if (argc < 2) {
+        if (argc < 3) {
                 fprintf(stderr, "Usage: %s inputURI\n", argv[0]);
                 return 1;
         }
@@ -170,8 +251,11 @@ int main(int argc, char *argv[])
                 return 1;
         }
 	
-	
-	
+	ot = strtol(argv[2],NULL,10);
+	if(ot == 0){
+		ot = 1;	
+	}
+
         if (trace_start(trace) == -1) {
                 trace_perror(trace,"Starting trace");
                 libtrace_cleanup(trace, packet);
@@ -182,18 +266,8 @@ int main(int argc, char *argv[])
         while (trace_read_packet(trace,packet)>0) {
                 per_packet(packet);
         }
-
-	printf("------------Heavy Hiiters------------\n");
-	for(i=0;i<Table_entry_cnt;i++)
-	{
-		printf("#%d :  %s  ",i, inet_ntop(AF_INET, &HH_Table[i], str, 20));
-		hash_key1 = hash31(3721,917,ntohl(HH_Table[i]))%HashCounterNumber;
-		hash_key2 = hash31(6969,520,ntohl(HH_Table[i]))%HashCounterNumber;
-		hash_key3 = hash31(5278,444,ntohl(HH_Table[i]))%HashCounterNumber;
-		min = Minof3(&HashCounter1[hash_key1],&HashCounter2[hash_key2],&HashCounter3[hash_key3]);
-		printf("trasmit %d Bytes  ",min);
-		printf("consume %03f%% \n",((float)min*100)/total_pkt_len);
-	}
+	
+	
 
         if (trace_is_err(trace)) {
                 trace_perror(trace,"Reading packets");

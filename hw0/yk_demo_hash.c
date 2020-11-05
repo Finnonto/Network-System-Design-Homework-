@@ -107,7 +107,7 @@ void per_packet(libtrace_packet_t *packet)
 	frame_length=trace_get_framing_length(packet);
 	printf("frame_Length=%d\n",frame_length);
 	if (payload_length == 0) 
-		printf("can not get payload length");
+		printf("can not get payload length\n");
 	else
 		printf("payload_Length=%d\n",payload_length);	
 
@@ -135,6 +135,7 @@ void per_packet(libtrace_packet_t *packet)
 
 	/* If the port is zero, libtrace has told us that there is no
 	 * legitimate port number present in the packet */
+		
 	if (port == 0)
 		printf("NULL\n");
 	else

@@ -1,9 +1,14 @@
 LIBINCLUDE = -ltrace
-
+LIBDIR = ../lib/massdal
 all: create read time length source gettcp http write filter config header \
 	mplstag mplscount yk_sourcedemo
 yk_sourcedemo: yk_sourcedemo.c
 	gcc -o yk_sourcedemo yk_sourcedemo.c $(LIBINCLUDE)
+Finn_payload_bin: Finn_payload_bin.c
+	gcc -o Finn_payload_bin Finn_payload_bin.c $(LIBINCLUDE)
+Finn_MultiStage_Filter: Finn_MultiStage_Filter.c
+	gcc  -g -o Finn_MultiStage_Filter Finn_MultiStage_Filter.c $(LIBDIR)/prng.c $(LIBINCLUDE) -lm 
+
 create: createdemo.c
 	gcc -o createdemo createdemo.c $(LIBINCLUDE)
 
@@ -46,5 +51,5 @@ mplstag: mplstag.c
 clean:
 	rm -f createdemo readdemo timedemo sourcedemo lengthdemo gettcpdemo
 	rm -f httpcount writedemo filterdemo configdemo headerdemo mplstag
-	rm -f mplscount
+	rm -f mplscount yk_sourcedemo Finn_payload_bin Finn_MultiStage_Filter
 	

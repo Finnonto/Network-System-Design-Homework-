@@ -16,6 +16,9 @@
  * effective. Libtrace will have provided us a pointer to the start of the
  * MAC address within the packet, so we can just use array indices to grab
  * each byte of the MAC address in turn */
+
+int pkt_cnt = 0;
+
 inline void print_mac(uint8_t *mac) {
 
 	printf("%02x:%02x:%02x:%02x:%02x:%02x ", mac[0], mac[1], mac[2], mac[3],
@@ -63,7 +66,8 @@ void per_packet(libtrace_packet_t *packet)
 	struct sockaddr *addr_ptr;
 	uint16_t port;
 	uint8_t *mac;
-
+	pkt_cnt++;
+	printf("%d\n",pkt_cnt);
 	/* Get the source mac */
 	mac = trace_get_source_mac(packet);
 	
