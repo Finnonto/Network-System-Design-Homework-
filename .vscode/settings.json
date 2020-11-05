@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "prng.h": "c",
+        "socket.h": "c",
+        "in.h": "c",
+        "*.tcc": "c"
+    }
+}
