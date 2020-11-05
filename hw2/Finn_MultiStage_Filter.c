@@ -33,7 +33,27 @@
 #include <arpa/inet.h>
 //#include "prng.h"
 #include "../lib/massdal/prng.h"
+#include <ncurses.h>
 #define HashCounterNumber 1000
+typedef struct _win_border_struct {
+	chtype 	ls, rs, ts, bs, 
+	 	tl, tr, bl, br;
+}WIN_BORDER;
+
+typedef struct _WIN_struct {
+
+	int startx, starty;
+	int height, width;
+	WIN_BORDER border;
+}WIN;
+void init_win_params(WIN *p_win);
+void create_box(WIN *win, bool flag);
+
+uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c);
+uint32_t get_entry_bytes(unsigned long entry);
+void bubble_sort(unsigned long *array,uint16_t limit);
+void get_top10entry(unsigned long* HH_Table,uint16_t Table_entry_cnt);
+void MultistageFilter(struct sockaddr *ip,size_t payload_length);
 
 
 
@@ -58,9 +78,12 @@ char str[20];
 unsigned int total_pkt_len = 0;//for length
 uint64_t count = 0;// for packet number
 
+WIN win;
+
+
 inline void swap(unsigned long* x,unsigned long* y) {unsigned long t; t = *x; *x=*y; *y=t;}
 
-inline uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c)
+uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c)
 {
 	uint32_t min = 0;
 	min = *a;
@@ -74,7 +97,7 @@ inline uint32_t Minof3(uint32_t *a,uint32_t *b,uint32_t *c)
 	return min;
 }
 
-inline uint32_t get_entry_bytes(unsigned long entry)
+uint32_t get_entry_bytes(unsigned long entry)
 {
 	hash_key1 = hash31(3721,917,ntohl(entry))%HashCounterNumber;
 	hash_key2 = hash31(6969,520,ntohl(entry))%HashCounterNumber;
@@ -82,9 +105,9 @@ inline uint32_t get_entry_bytes(unsigned long entry)
 	return Minof3(&HashCounter1[hash_key1],&HashCounter2[hash_key2],&HashCounter3[hash_key3]);
 }
 
-inline void bubble_sort(unsigned long *array,uint16_t limit)
+void bubble_sort(unsigned long *array,uint16_t limit)
 {
-	for(i=0;i<limit;i--)
+	for(i=0;i<limit;i++)
 	{
 		for(j=limit-1;j>i;j--)
 		{
@@ -93,35 +116,45 @@ inline void bubble_sort(unsigned long *array,uint16_t limit)
 	}
 }
 
-inline void get_top10entry()
-{
+void get_top10entry(unsigned long* HH_Table,uint16_t Table_entry_cnt)
+{	
+	
+	uint16_t i,x, y;
+
+	x = win.startx;
+	y = win.starty;
+	
 	bubble_sort(HH_Table,Table_entry_cnt);
-	printf("------------Heavy Hiiters------------\n");
+
 	if(Table_entry_cnt<10)
 	{
 		for(i=0;i<Table_entry_cnt;i++)
 		{
-			printf("#%d :  %s  ",i+1, inet_ntop(AF_INET, &HH_Table[i], str, 20));
+			mvprintw(y+i+3,x+16,"%s",inet_ntop(AF_INET, &HH_Table[i], str, 20));
 			min = get_entry_bytes(HH_Table[i]);
-			printf("trasmit %d Bytes  ",min);
-			printf("consume %03f%% \n",((float)min*100)/total_pkt_len);
+			mvprintw(y+i+3,x+45,"%d",min);
+			mvprintw(y+i+3,x+67,"%.1f",((float)min*100)/total_pkt_len);
 		}
+		usleep(400000);
+		refresh();
 	}
 	else
 	{
 		for(i=0;i<10;i++)
 		{
-			printf("#%d :  %s  ",i+1, inet_ntop(AF_INET, &HH_Table[i], str, 20));
+			mvprintw(y+i+3,x+16,"%s",inet_ntop(AF_INET, &HH_Table[i], str, 20));
 			min = get_entry_bytes(HH_Table[i]);
-			printf("trasmit %d Bytes  ",min);
-			printf("consume %03f%% \n",((float)min*100)/total_pkt_len);
+			mvprintw(y+i+3,x+45,"%d",min);
+			mvprintw(y+i+3,x+67,"%.1f",((float)min*100)/total_pkt_len);
 		}	
+		usleep(400000);
+		refresh();
 	}
 }
 
 
 
-inline void MultistageFilter(struct sockaddr *ip,size_t payload_length)
+void MultistageFilter(struct sockaddr *ip,size_t payload_length)
 {
 	
 	
@@ -176,19 +209,7 @@ void per_packet(libtrace_packet_t *packet)
 	struct sockaddr *addr_ptr;
 	struct timeval ts;
 	size_t payload_length;
-	// get timestamp	
-	ts = trace_get_timeval(packet);
-	
-	if (next_report == 0) {
-		next_report = ts.tv_sec + ot;
-	}	
-	while (ts.tv_sec > next_report) {
-		get_top10entry();
-		count = 0;
-		next_report += ot;
-	}
-	
-	count += 1;	
+		
 
 	//get payload
 	payload_length=trace_get_payload_length(packet);
@@ -201,6 +222,20 @@ void per_packet(libtrace_packet_t *packet)
 
 	// apply Multistage Filter to this packet
 	MultistageFilter(addr_ptr,payload_length);
+
+	// get timestamp	
+	ts = trace_get_timeval(packet);
+	
+	if (next_report == 0) {
+		next_report = ts.tv_sec + ot;
+	}	
+	while (ts.tv_sec > next_report) {
+		get_top10entry(HH_Table,Table_entry_cnt);
+		count = 0;
+		next_report += ot;
+	}
+	
+	count += 1;
 	
 }
 
@@ -262,10 +297,27 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
+	
+
+
+	initscr();			/* Start curses mode 		*/
+	start_color();			/* Start the color functionality */
+	curs_set(0);
+	cbreak();			/* Line buffering disabled, Pass on
+					 * everty thing to me 		*/
+	init_pair(1, COLOR_CYAN, COLOR_BLACK);
+	/* Initialize the window parameters */
+	init_win_params(&win);
+	attron(COLOR_PAIR(1));
+	refresh();
+	attroff(COLOR_PAIR(1));
+	create_box(&win, TRUE);
+
 
         while (trace_read_packet(trace,packet)>0) {
                 per_packet(packet);
         }
+	
 	
 	
 
@@ -276,6 +328,75 @@ int main(int argc, char *argv[])
         }
 
         libtrace_cleanup(trace, packet);
-        return 0;
+        
+	
+	while(getch())break;
+
+	endwin();
+	return 0;
+
 }
 
+
+void init_win_params(WIN *p_win)
+{
+	p_win->height = 13;
+	p_win->width = COLS-1;
+	p_win->starty = 0;	
+	p_win->startx = 0;
+
+	p_win->border.ls = '|';
+	p_win->border.rs = '|';
+	p_win->border.ts = '-';
+	p_win->border.bs = '-';
+	p_win->border.tl = '+';
+	p_win->border.tr = '+';
+	p_win->border.bl = '+';
+	p_win->border.br = '+';
+
+}
+
+void create_box(WIN *p_win, bool flag)
+{	int i, j;
+	int x, y, w, h;
+
+	x = p_win->startx;
+	y = p_win->starty;
+	w = p_win->width;
+	h = p_win->height;
+
+	if(flag == TRUE)
+	{	mvaddch(y, x, p_win->border.tl);
+		mvaddch(y, x + w, p_win->border.tr);
+		mvaddch(y + h, x, p_win->border.bl);
+		mvaddch(y + h, x + w, p_win->border.br);
+		
+		mvprintw(y+1,x+1," top10");
+		mvprintw(y+1,x+25,"IP");
+		mvprintw(y+1,x+47,"Bytes");
+		mvprintw(y+1,x+66,"Comsume(%)");
+		for(i=3;i<13;i++)
+		{
+			mvprintw(y+i,x+1,"#%d",i-2);
+		}
+		
+		mvvline(y + 1, x, p_win->border.ls, h - 1);
+		mvvline(y + 1, x+10, p_win->border.ls, h - 1);
+		mvvline(y + 1, x+40, p_win->border.ls, h - 1);
+		mvvline(y + 1, x+60, p_win->border.ls, h - 1);
+		mvvline(y + 1, x + w, p_win->border.rs, h - 1);
+		
+
+		mvhline(y, x + 1, p_win->border.ts, w - 1);
+		mvhline(y + h, x + 1, p_win->border.bs, w - 1);
+		mvhline(y + 2, x + 1, p_win->border.bs, w - 1);
+
+	}
+	else
+		for(j = y; j <= y + h; ++j)
+			for(i = x; i <= x + w; ++i)
+				mvaddch(j, i, ' ');
+				
+	refresh();
+
+}
