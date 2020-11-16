@@ -42,7 +42,7 @@
 #define swap(x,y) { Heavy_Hitter_Entry t= x ; x =y ;y = t; }
 
 typedef struct _Heavy_Hitter_Entry{
-	uint32_t IP;
+	struct in_addr IP;
 	uint16_t hash_key1;
 	uint16_t hash_key2;
 	uint16_t hash_key3;
@@ -63,6 +63,8 @@ typedef struct _WIN_struct {
 
 void init_win_params(WIN *p_win);
 void create_box(WIN *win, bool flag);
+void clean_win();
+
 
 void Filter_init();
 uint32_t get_entry_bytes(Heavy_Hitter_Entry* entry);
@@ -89,7 +91,6 @@ uint64_t first_time = 0;//
 uint32_t total_time = 0;
 long  percentage;
 uint32_t min;
-char str[20];
 unsigned int total_pkt_len = 0;//for length
 
 
@@ -116,7 +117,10 @@ void bubble_sort(Heavy_Hitter_Entry *array,uint16_t limit)
 	{
 		for(j=limit-1;j>i;j--)
 		{
-			if(get_entry_bytes(&array[j])>get_entry_bytes(&array[j-1])){swap(array[j],array[j-1]);}
+			if(get_entry_bytes(&array[j])>get_entry_bytes(&array[j-1]))
+			{
+				swap(array[j],array[j-1]);
+			}
 		}
 	}
 }
@@ -140,40 +144,46 @@ void get_top10entry(Heavy_Hitter_Entry *HH_Table)
 	y = win.starty;
 	
 	bubble_sort(HH_Table,Table_entry_cnt);
-
+	
 	if(Table_entry_cnt<10)
-	{
+	{	
+		clean_win();	
 		for(i=0;i<Table_entry_cnt;i++)
 		{
+			
 			min = get_entry_bytes(&HH_Table[i]);
 			
 			if(((float)min*100)/total_pkt_len < percentage)break;
 			else
 			{
-				mvprintw(y+i+3,x+14,"%s",inet_ntop(AF_INET, &HH_Table[i], str, 20));
-				mvprintw(y+i+3,x+34,"%d",min);	
-				mvprintw(y+i+3,x+50,"%.1f",((float)min*100)/total_pkt_len);
-			}
-			
-		}
-		usleep(400000);
-		refresh();
-	}
-	else
-	{
-		for(i=0;i<10;i++)
-		{
-			min = get_entry_bytes(&HH_Table[i]);
-			
-			if(((float)min*100)/total_pkt_len < percentage)break;
-			else
-			{
-				mvprintw(y+i+3,x+14,"%s",inet_ntop(AF_INET, &HH_Table[i], str, 20));
+				mvprintw(y+i+3,x+14,"%s",inet_ntoa(HH_Table[i].IP));
 				mvprintw(y+i+3,x+34,"%d",min);	
 				mvprintw(y+i+3,x+50,"%.1f",((float)min*100)/total_pkt_len);
 			}
 			
 		}	
+		
+		usleep(400000);
+		refresh();
+	}
+	else
+	{
+		clean_win();
+		for(i=0;i<10;i++)
+		{
+			
+			min = get_entry_bytes(&HH_Table[i]);
+			
+			if(((float)min*100)/total_pkt_len < percentage)break;
+			else
+			{
+				mvprintw(y+i+3,x+14,"%s",inet_ntoa(HH_Table[i].IP));
+				mvprintw(y+i+3,x+34,"%d",min);	
+				mvprintw(y+i+3,x+50,"%.1f",((float)min*100)/total_pkt_len);
+			}
+			
+		}	
+		
 		usleep(400000);
 		refresh();
 	}
@@ -209,7 +219,7 @@ void MultistageFilter(struct sockaddr *ip,size_t payload_length)
 
 			if(HashCounter1[hash_key1] >= threshold && HashCounter2[hash_key2] >= threshold && HashCounter3[hash_key3] >= threshold )
 			{
-				HH_Table[Table_entry_cnt].IP = source_ip_addr.s_addr ;
+				HH_Table[Table_entry_cnt].IP = source_ip_addr;
 				HH_Table[Table_entry_cnt].hash_key1 = hash_key1;
 				HH_Table[Table_entry_cnt].hash_key2 = hash_key2;
 				HH_Table[Table_entry_cnt].hash_key3 = hash_key3;
@@ -228,8 +238,22 @@ void MultistageFilter(struct sockaddr *ip,size_t payload_length)
 	}
 	
 }
+//my long dick
 
-
+void clean_win()
+{
+	uint16_t i;
+	{
+		for(i=0;i<10;i++)
+		{
+			mvprintw(i+3,14,"                ");
+			mvprintw(i+3,34,"          ");	
+			mvprintw(i+3,50,"          ");
+		}	
+		
+		//refresh();
+	}
+}
 
 void init_win_params(WIN *p_win)
 {
